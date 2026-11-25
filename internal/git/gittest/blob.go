@@ -1,0 +1,77 @@
+package gittest
+
+import (
+	"bytes"
+	"fmt"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+	"gitlab.com/gitlab-org/gitaly/v19/internal/git"
+	"gitlab.com/gitlab-org/gitaly/v19/internal/git/gitcmd"
+	"gitlab.com/gitlab-org/gitaly/v19/internal/gitaly/config"
+	"gitlab.com/gitlab-org/gitaly/v19/internal/testhelper"
+)
+
+// WriteBlobs writes n distinct blobs into the git repository's object
+// database. Each object has the current time in nanoseconds as contents.
+func WriteBlobs(tb testing.TB, cfg config.Cfg, repoPath string, n int) []git.ObjectID {
+	tb.Helper()
+
+	ctx := testhelper.Context(tb)
+	repoExecutor := NewRepositoryPathExecutor(tb, cfg, repoPath)
+
+	blobIDs := make([]git.ObjectID, 0, n)
+	for i := 0; i < n; i++ {
+		contents := []byte(strconv.Itoa(time.Now().Nanosecond()))
+
+		blobID, err := gitcmd.WriteBlob(ctx, repoExecutor, bytes.NewReader(contents), gitcmd.WriteBlobConfig{})
+		require.NoError(tb, err)
+
+		blobIDs = append(blobIDs, blobID)
+	}
+
+	return blobIDs
+}
+
+// WriteBlob writes the given contents as a blob into the repository and returns its OID.
+func WriteBlob(tb testing.TB, cfg config.Cfg, repoPath string, contents []byte) git.ObjectID {
+	tb.Helper()
+
+	blobID, err := gitcmd.WriteBlob(
+		testhelper.Context(tb),
+		NewRepositoryPathExecutor(tb, cfg, repoPath),
+		bytes.NewReader(contents),
+		gitcmd.WriteBlobConfig{},
+	)
+	require.NoError(tb, err)
+
+	return blobID
+}
+
+// WriteBlobsWithCommonPrefix writes two blobs whose object IDs share their first four hex
+// characters, the shortest abbreviation Git resolves, so that the prefix is an ambiguous short
+// object ID in the repository. It returns the second blob's ID and contents, and the shared
+// prefix.
+func WriteBlobsWithCommonPrefix(tb testing.TB, cfg config.Cfg, repoPath string) (git.ObjectID, []byte, string) {
+	tb.Helper()
+
+	seen := map[string][]byte{}
+	for i := 0; ; i++ {
+		contents := []byte(strconv.Itoa(i))
+		blobID := DefaultObjectHash.HashData(fmt.Appendf(nil, "blob %d\x00%s", len(contents), contents))
+		prefix := blobID.String()[:4]
+
+		otherContents, ok := seen[prefix]
+		if !ok {
+			seen[prefix] = contents
+			continue
+		}
+
+		WriteBlob(tb, cfg, repoPath, otherContents)
+		require.Equal(tb, blobID, WriteBlob(tb, cfg, repoPath, contents))
+
+		return blobID, contents, prefix
+	}
+}
