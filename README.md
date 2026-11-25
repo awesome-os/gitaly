@@ -107,3 +107,13 @@ deep into different parts of Gitaly and even Git.
 
 [roadmap]: https://handbook.gitlab.com/handbook/engineering/infrastructure-platforms/tenant-scale/gitaly/#roadmap
 [LabKit]: https://gitlab.com/gitlab-org/labkit/
+
+## Quick Install & Run (Windows / Linux / macOS)
+
+```sh
+# Install / hydrate from v11 CAS via holo-pm
+holo-pm install repository://github.com/awesome-os/gitaly@main
+
+# Or project & run directly via holo-project (0-byte hardlink)
+holo-project "project://go/gitaly?from=repository://github.com/awesome-os/gitaly@main"
+```
